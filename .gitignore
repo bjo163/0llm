@@ -9,14 +9,14 @@
 
 # Ignore local python virtual environment
 venv/
-
+.venv/
 # Ignore streamlit_chat_app.py conversations pickle
 conversations.pkl
 *.pkl
-
+g4f_contents/
 # Ignore accounts created by api's
 accounts.txt
-
+.env
 .idea/
 **/__pycache__/
 __pycache__/

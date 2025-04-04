@@ -20,3 +20,5 @@ nodriver
 python-multipart
 pypdf2
 python-docx
+
+python-dotenv

@@ -5,8 +5,8 @@ ENV G4F_VERSION $G4F_VERSION
 
 ENV SE_SCREEN_WIDTH 1850
 ENV G4F_DIR /app
-ENV G4F_LOGIN_URL http://localhost:7900/?autoconnect=1&resize=scale&password=secret
-
+# ENV G4F_LOGIN_URL http://localhost:7900/?autoconnect=1&resize=scale&password=secret
+ENV G4F_LOGIN_URL=http://localhost:7900/?auto-login=true
 USER root
 
 #  If docker compose, install git
@@ -52,4 +52,4 @@ RUN pip install --break-system-packages --upgrade pip \
 ADD --chown=$SEL_UID:$SEL_GID g4f $G4F_DIR/g4f
 
 # Expose ports
-EXPOSE 8080 7900
+EXPOSE 1337 8080 7900

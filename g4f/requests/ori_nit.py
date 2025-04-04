@@ -8,35 +8,18 @@ from typing import Iterator
 from http.cookies import Morsel
 from pathlib import Path
 import asyncio
-import logging
-
-# Setup logging error ke file
-LOG_DIR = Path("logs")
-LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = LOG_DIR / "error.log"
-logging.basicConfig(
-    filename=LOG_FILE,
-    level=logging.ERROR,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-
-def log_exception(e: Exception):
-    logging.error("Exception occurred", exc_info=e)
-
 try:
     from curl_cffi.requests import Session, Response
     from .curl_cffi import StreamResponse, StreamSession, FormData
     has_curl_cffi = True
-except ImportError as e:
-    log_exception(e)
+except ImportError:
     from typing import Type as Response
     from .aiohttp import StreamResponse, StreamSession, FormData
     has_curl_cffi = False
 try:
     import webview
     has_webview = True
-except ImportError as e:
-    log_exception(e)
+except ImportError:
     has_webview = False
 try:
     import nodriver
@@ -44,16 +27,14 @@ try:
     from nodriver.core.config import find_chrome_executable
     from nodriver import Browser, Tab, util
     has_nodriver = True
-except ImportError as e:
-    log_exception(e)
+except ImportError:
     from typing import Type as Browser
     from typing import Type as Tab
     has_nodriver = False
 try:
     from platformdirs import user_config_dir
     has_platformdirs = True
-except ImportError as e:
-    log_exception(e)
+except ImportError:
     has_platformdirs = False
 
 from .. import debug
@@ -71,39 +52,33 @@ if not has_curl_cffi:
 async def get_args_from_webview(url: str) -> dict:
     if not has_webview:
         raise MissingRequirementsError('Install "webview" package')
-    try:
-        window = webview.create_window("", url, hidden=True)
-        await asyncio.sleep(2)
-        body = None
-        while body is None:
-            try:
-                await asyncio.sleep(1)
-                body = window.dom.get_element("body:not(.no-js)")
-            except:
-                ...
-        headers = {
-            **WEBVIEW_HAEDERS,
-            "User-Agent": window.evaluate_js("this.navigator.userAgent"),
-            "Accept-Language": window.evaluate_js("this.navigator.language"),
-            "Referer": window.real_url
-        }
-        cookies = [list(*cookie.items()) for cookie in window.get_cookies()]
-        cookies = {name: cookie.value for name, cookie in cookies}
-        window.destroy()
-        return {"headers": headers, "cookies": cookies}
-    except Exception as e:
-        log_exception(e)
-        raise
+    window = webview.create_window("", url, hidden=True)
+    await asyncio.sleep(2)
+    body = None
+    while body is None:
+        try:
+            await asyncio.sleep(1)
+            body = window.dom.get_element("body:not(.no-js)")
+        except:
+            ...
+    headers = {
+        **WEBVIEW_HAEDERS,
+        "User-Agent": window.evaluate_js("this.navigator.userAgent"),
+        "Accept-Language": window.evaluate_js("this.navigator.language"),
+        "Referer": window.real_url
+    }
+    cookies = [list(*cookie.items()) for cookie in window.get_cookies()]
+    cookies = {name: cookie.value for name, cookie in cookies}
+    window.destroy()
+    return {"headers": headers, "cookies": cookies}
 
 def get_cookie_params_from_dict(cookies: Cookies, url: str = None, domain: str = None) -> list[CookieParam]:
-    return [
-        CookieParam.from_json({
-            "name": key,
-            "value": value,
-            "url": url,
-            "domain": domain
-        }) for key, value in cookies.items()
-    ]
+    [CookieParam.from_json({
+        "name": key,
+        "value": value,
+        "url": url,
+        "domain": domain
+    }) for key, value in cookies.items()]
 
 async def get_args_from_nodriver(
     url: str,
@@ -147,9 +122,6 @@ async def get_args_from_nodriver(
             },
             "proxy": proxy,
         }
-    except Exception as e:
-        log_exception(e)
-        raise
     finally:
         stop_browser()
 
@@ -178,25 +150,24 @@ async def get_nodriver(
         try:
             browser_executable_path = find_chrome_executable()
         except FileNotFoundError:
+            # Default to Edge if Chrome is not available.
             browser_executable_path = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
             if not os.path.exists(browser_executable_path):
                 browser_executable_path = None
     lock_file = Path(get_cookies_dir()) / ".nodriver_is_open"
     lock_file.parent.mkdir(exist_ok=True)
+    # Implement a short delay (milliseconds) to prevent race conditions.
     await asyncio.sleep(0.1 * random.randint(0, 50))
     if lock_file.exists():
-        try:
-            opend_at = float(lock_file.read_text())
-            time_open = time.time() - opend_at
-            if timeout * 2 > time_open:
-                debug.log(f"Nodriver: Browser is already in use since {time_open} secs.")
-                for _ in range(timeout):
-                    if lock_file.exists():
-                        await asyncio.sleep(1)
-                    else:
-                        break
-        except Exception as e:
-            log_exception(e)
+        opend_at = float(lock_file.read_text())
+        time_open = time.time() - opend_at
+        if timeout * 2 > time_open:
+            debug.log(f"Nodriver: Browser is already in use since {time_open} secs.")
+            for _ in range(timeout):
+                if lock_file.exists():
+                    await asyncio.sleep(1)
+                else:
+                    break
     lock_file.write_text(str(time.time()))
     debug.log(f"Open nodriver with user_dir: {user_data_dir}")
     try:
@@ -206,8 +177,7 @@ async def get_nodriver(
             browser_executable_path=browser_executable_path,
             **kwargs
         )
-    except Exception as e:
-        log_exception(e)
+    except:
         if util.get_registered_instances():
             browser = util.get_registered_instances().pop()
         else:

@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  0llm:
+    # image: hlohaus789/g4f:latest
+    shm_size: 2gb
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        G4F_VERSION: ${G4F_VERSION}  # ← Ini penting!
+    volumes:
+      - .:/app  # Sinkronisasi kode lokal untuk development
+      - ./har_and_cookies:/app/har_and_cookies  # Simpan cookies agar tetap ada setelah container restart
+      - ./generated_images:/app/generated_images  # Simpan hasil gambar ke folder lokal
+      
+    ports:
+      - '8080:8080'
+      - '1337:8080'
+      - '7900:7900'
+    environment:
+      - OLLAMA_HOST=host.docker.internal
