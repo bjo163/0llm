@@ -4,6 +4,7 @@ emoji: "🤗"
 colorFrom: "#0d47a1"
 colorTo: "#1976d2"
 sdk: docker
+sdk_version: "1.0"
 pinned: true
 app_file: app.py
 ---

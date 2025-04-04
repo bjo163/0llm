@@ -1,6 +1,7 @@
 #!/bin/bash
 # File: dev-docker-build.sh
 # Description: Rebuild and restart docker-compose dev environment with logs and commit changes to Git
+
 set -e # Exit immediately if a command exits with a non-zero status
 
 COMPOSE_FILE="docker-compose.dev.yml"
@@ -20,29 +21,45 @@ run_docker_command() {
     "$@" || { echo "❌ Command failed: $*"; exit 1; }
 }
 
+# Function to check if a container is executable
+check_container_exec() {
+    local service_name=$1
+    echo "🔍 Checking if $service_name can be executed..."
+    
+    # Attempt to exec into the container
+    if docker exec "$service_name" sh -c "exit" 2>/dev/null; then
+        echo "✅ $service_name is accessible!"
+        return 0
+    else
+        echo "❌ $service_name is not accessible!"
+        return 1
+    fi
+}
+
 echo "📦 Stopping existing containers (if any)..."
 run_docker_command docker compose -f "$COMPOSE_FILE" down
 
 echo "🔧 Rebuilding and starting containers in detached mode..."
 run_docker_command docker compose -f "$COMPOSE_FILE" up --build -d
 
-# Wait for containers to be healthy (if health checks are defined) or just a few seconds to stabilize
-# You can adjust the sleep time or implement a check for the health status if you have health checks set
-echo "⏳ Waiting for containers to stabilize..."
-sleep 10  # Wait for 10 seconds. Modify this as necessary to suit your setup.
+echo "✅ Containers are starting..."
 
-echo "✅ Containers are up and running:"
-run_docker_command docker compose -f "$COMPOSE_FILE" ps
+# Check each service to see if it can be accessed
+for service in $(docker compose -f "$COMPOSE_FILE" config --services); do
+    if check_container_exec "$service"; then
+        echo "📄 Streaming logs for $service (Press Ctrl+C to stop):"
+        run_docker_command docker compose -f "$COMPOSE_FILE" logs -f "$service"
+    else
+        echo "❌ Skipping logs for $service due to accessibility issue."
+    fi
+done
 
 # Create a dynamic commit message with a Unix timestamp
-commit_message="Commit on $(date +%s)" # This will use the current Unix timestamp
-commit_changes "$commit_message" # Call the function to commit the changes
+commit_message="Commit on $(date +%s)"
+commit_changes "$commit_message"
 
 # Push to the main branch on the origin remote
 run_docker_command git push origin main --force
+
 # Push to the main branch on the space remote
 run_docker_command git push space main --force
-
-# Start streaming logs after ensuring all previous commands have completed
-echo "📄 Streaming logs (Press Ctrl+C to stop):"
-run_docker_command docker compose -f "$COMPOSE_FILE" logs -f
