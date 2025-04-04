@@ -1,8 +1,8 @@
 ---
 title: "0llm - Platform AI Multi-Provider by ZENIX.ID"
 emoji: "🤗"
-colorFrom: "#0d47a1"
-colorTo: "#1976d2"
+colorFrom: "green"
+colorTo: "gray"
 sdk: docker
 sdk_version: "1.0"
 pinned: true

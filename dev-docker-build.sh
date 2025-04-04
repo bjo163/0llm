@@ -47,6 +47,7 @@ echo "✅ Containers are starting..."
 # Check each service to see if it can be accessed
 for service in $(docker compose -f "$COMPOSE_FILE" config --services); do
     if check_container_exec "$service"; then
+        # Streaming logs for accessible container
         echo "📄 Streaming logs for $service (Press Ctrl+C to stop):"
         run_docker_command docker compose -f "$COMPOSE_FILE" logs -f "$service"
     else
