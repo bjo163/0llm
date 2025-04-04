@@ -1,9 +1,12 @@
 ---
 title: "0llm - Platform AI Multi-Provider by ZENIX.ID"
-description: "0llm adalah proyek open-source dari ZENIX.ID yang menyediakan API multi-provider dan antarmuka web untuk layanan AI, dilengkapi fitur load balancing dan flow control."
-tags: ["AI", "API", "Multi-Provider", "Open Source", "Hugging Face Spaces", "ZENIX.ID"]
-license: "gpl-3.0"
-widget: "app.py"
+emoji: "🤗"
+colorFrom: "#0d47a1"
+colorTo: "#1976d2"
+sdk: docker
+pinned: true
+app_file: app.py
+pinned: false
 ---
 
 # 0llm

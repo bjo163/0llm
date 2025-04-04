@@ -17,7 +17,7 @@ commit_changes() {
 
 # Function to run Docker commands with error handling
 run_docker_command() {
-    "$@" || { echo "❌ Docker command failed: $*"; exit 1; }
+    "$@" || { echo "❌ Command failed: $*"; exit 1; }
 }
 
 echo "📦 Stopping existing containers (if any)..."
@@ -25,6 +25,11 @@ run_docker_command docker compose -f "$COMPOSE_FILE" down
 
 echo "🔧 Rebuilding and starting containers in detached mode..."
 run_docker_command docker compose -f "$COMPOSE_FILE" up --build -d
+
+# Wait for containers to be healthy (if health checks are defined) or just a few seconds to stabilize
+# You can adjust the sleep time or implement a check for the health status if you have health checks set
+echo "⏳ Waiting for containers to stabilize..."
+sleep 10  # Wait for 10 seconds. Modify this as necessary to suit your setup.
 
 echo "✅ Containers are up and running:"
 run_docker_command docker compose -f "$COMPOSE_FILE" ps
@@ -38,5 +43,6 @@ run_docker_command git push origin main --force
 # Push to the main branch on the space remote
 run_docker_command git push space main --force
 
+# Start streaming logs after ensuring all previous commands have completed
 echo "📄 Streaming logs (Press Ctrl+C to stop):"
 run_docker_command docker compose -f "$COMPOSE_FILE" logs -f
