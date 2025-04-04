@@ -6,7 +6,6 @@ colorTo: "#1976d2"
 sdk: docker
 pinned: true
 app_file: app.py
-pinned: false
 ---
 
 # 0llm
