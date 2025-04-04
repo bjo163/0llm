@@ -5,6 +5,7 @@
 #              Creates temporary commit (Commit B) with root Dockerfile.
 #              Pushes Commit B to space.
 #              Resets local branch back to Commit A and cleans up.
+#              Automatically handles .gitignore entry for the temporary root Dockerfile.
 
 # --- Konfigurasi ---
 set -e # Keluar segera jika sebuah perintah keluar dengan status bukan nol
@@ -47,15 +48,13 @@ run_command() {
     local status=$?
     if [ $status -ne 0 ]; then
         echo "   ❌ ERROR: Command failed with status $status: $*" >&2
-        # Mencoba reset jika error terjadi setelah commit sementara dibuat
-        # Ini mungkin tidak selalu aman, tergantung di mana error terjadi
-        # cleanup_local_state # Pertimbangkan fungsi cleanup yang lebih canggih jika perlu
+        # cleanup_local_state # (Pertimbangkan jika perlu)
         exit $status
     fi
     echo "   ✅ Command successful: $*"
 }
 
-# Fungsi check_container_exec dan check_local_containers (sama seperti sebelumnya)
+# Fungsi check_container_exec dan check_local_containers (tetap sama)
 check_container_exec() {
     local full_container_name=$1; local compose_file_ref=$2
     echo "   🔍 Checking accessibility for container [${compose_file_ref}]: ${full_container_name}...";
@@ -71,33 +70,56 @@ check_local_containers() {
     echo ""; echo "   --- Local Accessibility Summary ---"; if [ ${#accessible_services[@]} -gt 0 ]; then echo "   ✅ Accessible Services:"; for svc in "${accessible_services[@]}"; do echo "      - $svc"; done; else echo "   ℹ️ No local services confirmed accessible."; fi; if [ ${#inaccessible_services[@]} -gt 0 ]; then echo "   ❌ Inaccessible/Problematic Services:"; for svc in "${inaccessible_services[@]}"; do echo "      - $svc"; done; else echo "   ℹ️ All checked local services seem accessible or running."; fi; echo "   ----------------------------------"
 }
 
-
 # Fungsi commit utama (Commit A)
 commit_main_changes() {
     log_step "GIT" "Checking for main Git changes..."
-    # Periksa perubahan pada file terlacak, abaikan file tak terlacak (seperti Dockerfile root jika belum di-add)
     if [[ -z $(git status --porcelain=v1 --untracked-files=no) ]]; then
         echo "   ℹ️ No tracked changes detected in the working directory. Skipping main commit."
-        return 1 # Mengembalikan status 1 untuk menandakan tidak ada commit
+        return 1
     fi
     echo "   📝 Staging all tracked changes for main commit..."
-    run_command git add -u # Hanya stage file terlacak yang berubah/dihapus
-    # Pertimbangkan 'git add .' jika Anda juga ingin menambahkan file BARU yang TIDAK diabaikan
+    run_command git add -u
     local commit_message="Automated commit after local build on $(date +'%Y-%m-%d %H:%M:%S %Z')"
     echo "   📝 Creating main commit (Commit A) with message: '${commit_message}'"
     run_command git commit -m "$commit_message"
-    return 0 # Sukses, commit dibuat
+    return 0
 }
 
+# Fungsi untuk memastikan entry ada di .gitignore
 ensure_gitignore_entry() {
-    local entry="$1"; local gitignore_file=".gitignore"; if [ ! -f "$gitignore_file" ]; then touch "$gitignore_file"; fi
-    if ! grep -qxF "$entry" "$gitignore_file"; then echo "   ➕ Adding '${entry}' to ${gitignore_file}..."; if [ -s "$gitignore_file" ]; then echo "" >> "$gitignore_file"; fi; echo "$entry" >> "$gitignore_file"; echo "   ✅ Entry '${entry}' added."; fi
+    local entry="$1"
+    local gitignore_file=".gitignore"
+
+    # Buat .gitignore jika tidak ada
+    if [ ! -f "$gitignore_file" ]; then
+        echo "   ℹ️ Creating ${gitignore_file} file."
+        touch "$gitignore_file"
+    fi
+
+    # Periksa apakah entry sudah ada (dengan tepat, tanpa spasi ekstra)
+    if grep -qxF "$entry" "$gitignore_file"; then
+        echo "   ✅ Entry '${entry}' already exists in ${gitignore_file}."
+    else
+        echo "   ➕ Adding '${entry}' to ${gitignore_file}..."
+        # Tambahkan baris baru sebelum entry baru jika file tidak kosong
+        if [ -s "$gitignore_file" ]; then
+             # Hanya tambahkan newline jika baris terakhir BUKAN newline
+             [[ $(tail -c1 "$gitignore_file" | wc -l) -eq 0 ]] && echo "" >> "$gitignore_file"
+        fi
+        echo "$entry" >> "$gitignore_file"
+        echo "   ✅ Entry '${entry}' added."
+        # Kita tidak melakukan commit otomatis untuk perubahan .gitignore di sini.
+        # Pengguna sebaiknya me-review dan commit perubahan .gitignore secara manual.
+        echo "   ⚠️ Remember to commit changes to .gitignore if it was modified."
+    fi
 }
+
 
 # Fungsi cleanup - menghapus Dockerfile root jika flag diset
 cleanup_root_dockerfile() {
   if [ "$ROOT_DOCKERFILE_CLEANUP_NEEDED" = true ] && [ -f "$TEMP_ROOT_DOCKERFILE" ]; then
     echo "   🧹 Cleaning up temporary root Dockerfile (${TEMP_ROOT_DOCKERFILE})..."
+    # Menghapus dengan -f agar tidak error jika file tidak ada (meskipun flag true)
     rm -f "$TEMP_ROOT_DOCKERFILE"
     ROOT_DOCKERFILE_CLEANUP_NEEDED=false # Reset flag
   fi
@@ -113,7 +135,7 @@ trap cleanup_root_dockerfile EXIT SIGINT SIGTERM
 
 # Langkah 0: Pastikan Dockerfile root ada di .gitignore
 log_step "PREP" "Ensuring root Dockerfile ('${TEMP_ROOT_DOCKERFILE}') is in .gitignore"
-ensure_gitignore_entry "${TEMP_ROOT_DOCKERFILE}"
+ensure_gitignore_entry "${TEMP_ROOT_DOCKERFILE}" # <<< PENANGANAN .GITIGNORE OTOMATIS
 
 # Validasi file
 log_step "PREP" "Validating required files..."
@@ -137,19 +159,15 @@ echo "✅ LOCAL Phase Complete."
 echo "-------------------------------------------"
 
 # === FASE 2: GIT - Commit A & Push Origin ===
-# Simpan commit hash sebelum potensi commit baru
 HEAD_BEFORE_MAIN_COMMIT=$(git rev-parse HEAD)
-
-commit_main_changes # Coba buat Commit A
+commit_main_changes
 main_commit_status=$?
 
 if [ $main_commit_status -eq 0 ]; then
-    # Commit A dibuat
     COMMIT_A_HASH=$(git rev-parse HEAD)
     log_step "GIT" "Pushing main commit (Commit A: ${COMMIT_A_HASH:0:7}) to ${REMOTE_DEV}..."
     run_command git push "${REMOTE_DEV}" "${GIT_BRANCH}"
 else
-    # Tidak ada perubahan untuk Commit A
     COMMIT_A_HASH=$HEAD_BEFORE_MAIN_COMMIT
     log_step "GIT" "No changes detected for main commit. Using current HEAD (${COMMIT_A_HASH:0:7}) as base for space push."
 fi
@@ -160,40 +178,32 @@ echo "-------------------------------------------"
 # === FASE 3: GIT - Prepare & Push Space (Commit B) ===
 log_step "SPACE PREP" "Preparing temporary commit (Commit B) for Space push..."
 
-# Pastikan kita berada pada Commit A
 if [ "$(git rev-parse HEAD)" != "$COMMIT_A_HASH" ]; then
     echo "❌ ERROR: HEAD is not at the expected Commit A (${COMMIT_A_HASH:0:7}). Aborting."
+    cleanup_root_dockerfile # Coba cleanup jika ada yg tersisa
     exit 1
 fi
 
-# Pastikan working directory bersih relatif terhadap Commit A
 if ! git diff --quiet HEAD; then
    echo "   ⚠️ Warning: Working directory has uncommitted changes relative to Commit A. These changes will NOT be included in the push to space."
-   # Anda bisa memilih untuk exit di sini jika ini tidak diinginkan:
-   # echo "❌ ERROR: Working directory not clean relative to Commit A. Please commit or stash changes."
-   # exit 1
 fi
 
-# Salin Dockerfile dari sumber ke root
 echo "   Copying '${SOURCE_DOCKERFILE_PATH}' -> '${TEMP_ROOT_DOCKERFILE}'"
 run_command cp "${SOURCE_DOCKERFILE_PATH}" "${TEMP_ROOT_DOCKERFILE}"
-ROOT_DOCKERFILE_CLEANUP_NEEDED=true # Set flag untuk cleanup
+ROOT_DOCKERFILE_CLEANUP_NEEDED=true
 
-# Tambahkan Dockerfile root ke index
 echo "   Staging temporary root Dockerfile..."
-run_command git add "${TEMP_ROOT_DOCKERFILE}"
+# Kita perlu `git add` meskipun ada di .gitignore karena kita ingin *memaksa* file ini masuk ke commit B
+# Opsi -f (force) digunakan untuk menambahkan file yang diabaikan
+run_command git add -f "${TEMP_ROOT_DOCKERFILE}"
 
-# Buat commit sementara (Commit B)
 echo "   Creating temporary commit (Commit B)..."
-# Gunakan --no-verify untuk melewati hook pre-commit jika ada
 run_command git commit --no-verify -m "${TEMP_COMMIT_MSG}"
 COMMIT_B_HASH=$(git rev-parse HEAD)
 echo "   ✅ Temporary Commit B created: ${COMMIT_B_HASH:0:7}"
 
 log_step "SPACE PUSH" "Pushing temporary commit (Commit B: ${COMMIT_B_HASH:0:7}) to ${REMOTE_SPACE}..."
 echo "   ⚠️ This push uses --force-with-lease, overwriting '${GIT_BRANCH}' on '${REMOTE_SPACE}'."
-# Push Commit B (HEAD saat ini) ke branch tujuan di remote space
-# --force-with-lease lebih aman, hanya akan push jika remote belum berubah sejak fetch terakhir
 run_command git push --force-with-lease "${REMOTE_SPACE}" "HEAD:${GIT_BRANCH}"
 
 echo "-------------------------------------------"
@@ -204,13 +214,11 @@ echo "-------------------------------------------"
 # === FASE 4: GIT - Cleanup Local State ===
 log_step "CLEANUP" "Resetting local '${GIT_BRANCH}' branch back to Commit A (${COMMIT_A_HASH:0:7})..."
 echo "   Current HEAD is Commit B: $(git rev-parse HEAD | cut -c1-7)"
-# Reset --hard akan menghapus Commit B dari riwayat lokal dan membersihkan working directory
-# termasuk menghapus TEMP_ROOT_DOCKERFILE karena sudah di-'add' sebelum Commit B
+# Reset --hard juga akan menghapus TEMP_ROOT_DOCKERFILE dari working dir karena tidak ada di Commit A
 run_command git reset --hard "${COMMIT_A_HASH}"
 echo "   ✅ Local branch reset to Commit A."
 
-# Hapus file sementara secara eksplisit (sebagai jaring pengaman tambahan, meskipun reset --hard harusnya sudah menghapusnya)
-cleanup_root_dockerfile
+# Panggil cleanup lagi via trap saat exit
 
 echo "-------------------------------------------"
 echo "✅ Local Cleanup Complete."
