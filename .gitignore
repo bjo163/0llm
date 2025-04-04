@@ -69,3 +69,5 @@ generated_images/
 projects/windows/
 har_and_cookies/
 logs/venv/
+
+Dockerfile
