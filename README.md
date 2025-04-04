@@ -6,7 +6,7 @@ colorTo: "gray"
 sdk: docker
 sdk_version: "1.0"
 pinned: true
-app_file: app.py
+app_port: 1337
 ---
 
 # 0llm
