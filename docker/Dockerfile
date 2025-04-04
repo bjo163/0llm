@@ -32,6 +32,7 @@ COPY docker/supervisor-api.conf /etc/supervisor/conf.d/api.conf
 # Change background image
 COPY docker/background.png /usr/share/images/fluxbox/ubuntu-light.png
 
+RUN mkdir -p $G4F_DIR/logs && chown -R ${SEL_UID}:${SEL_GID} $G4F_DIR/logs
 # Add user, fix permissions
 RUN chown "${SEL_UID}:${SEL_GID}" $HOME/.local
 
