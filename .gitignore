@@ -68,4 +68,4 @@ g4f/Provider/OpenaiChat2.py
 generated_images/
 projects/windows/
 har_and_cookies/
-logs/
+logs/venv/
