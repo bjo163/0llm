@@ -136,7 +136,7 @@ except ImportError:
 
 # --- Configuration ---
 CONFIG = {
-    "db_path": "provider_results.json",
+    "db_path": ".cache/db/provider.json",
     "ai_solution_endpoint_url": "http://160.22.193.9:1337/v1/chat/completions?provider=ASD",
     "ai_solution_model": "gpt-4o",
     "request_timeout": 60,  # Timeout for external AI calls
@@ -888,9 +888,10 @@ async def test_all_providers_async():
 if __name__ == "__main__":
     # Check dependencies
     try:
+        import inspect
+
         import aiohttp
         import requests
-        import inspect
     except ImportError as e:
         print(
             f"Error: Dependency missing ({e}). Install required libraries (pip install aiohttp requests)."
